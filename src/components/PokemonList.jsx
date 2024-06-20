@@ -1,21 +1,36 @@
-import {
-    useInfiniteQuery,
-} from '@tanstack/react-query';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { getPokemonList } from '../api/pokemonApi';
 import PokemonCard from './PokemonCard';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+
+const getRandomOffset = (totalCount) => {
+    return Math.floor(Math.random() * totalCount);
+};
 
 const PokemonList = () => {
+    const [randomOffset, setRandomOffset] = useState(0);
+
+    useEffect(() => {
+        const fetchTotalCount = async () => {
+            const response = await getPokemonList(0, 1);
+            setRandomOffset(getRandomOffset(response.count));
+        };
+
+        fetchTotalCount();
+    }, []);
+
     const {
         data,
         error,
         isLoading,
         fetchNextPage,
+        fetchPreviousPage,
         hasNextPage,
+        hasPreviousPage,
     } = useInfiniteQuery({
-        queryKey: ['pokemonList'],
+        queryKey: ['pokemonList', randomOffset],
         queryFn: ({ pageParam }) => getPokemonList(pageParam.offset, pageParam.limit),
-        initialPageParam: { offset: 0, limit: 10 },
+        initialPageParam: { offset: randomOffset, limit: 20 },
         getNextPageParam: (lastPage) => {
             if (!lastPage.next) return undefined;
             const urlObject = new URL(lastPage.next);
@@ -24,9 +39,18 @@ const PokemonList = () => {
             const limit = parseInt(searchParams.get("limit"));
             return { offset, limit };
         },
+        getPreviousPageParam: (firstPage) => {
+            if (!firstPage.previous) return undefined;
+            const urlObject = new URL(firstPage.previous);
+            const searchParams = urlObject.searchParams;
+            const offset = parseInt(searchParams.get("offset"));
+            const limit = parseInt(searchParams.get("limit"));
+            return { offset, limit };
+        },
     });
 
     const loadMoreRef = useRef(null);
+    const loadPreviousRef = useRef(null);
 
     useEffect(() => {
         const observer = new IntersectionObserver(
@@ -37,8 +61,8 @@ const PokemonList = () => {
             },
             {
                 root: null,
-                rootMargin: '20px',
-                threshold: 1.0,
+                rootMargin: '100px',
+                threshold: 0.5,
             }
         );
 
@@ -52,6 +76,31 @@ const PokemonList = () => {
             }
         };
     }, [loadMoreRef, hasNextPage, fetchNextPage]);
+
+    useEffect(() => {
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries[0].isIntersecting && hasPreviousPage) {
+                    fetchPreviousPage();
+                }
+            },
+            {
+                root: null,
+                rootMargin: '100px',
+                threshold: 0.5,
+            }
+        );
+
+        if (loadPreviousRef.current) {
+            observer.observe(loadPreviousRef.current);
+        }
+
+        return () => {
+            if (loadPreviousRef.current) {
+                observer.unobserve(loadPreviousRef.current);
+            }
+        };
+    }, [loadPreviousRef, hasPreviousPage, fetchPreviousPage]);
 
     return (
         <div className="flex flex-col">
@@ -70,6 +119,9 @@ const PokemonList = () => {
             )}
             {data && (
                 <>
+                    <div ref={loadPreviousRef} className="text-xl text-center mt-10">
+                        {hasPreviousPage ? 'Loading previous...' : ''}
+                    </div>
                     {data.pages.map((page, pageIndex) => (
                         page.results.map(({ name, url }, index) => (
                             <PokemonCard key={`${pageIndex}-${index}-${name}`} url={url} />
