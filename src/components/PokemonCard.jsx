@@ -20,7 +20,7 @@ function PokemonCard({ url }) {
   }
 
   return (
-    <div className="bg-white shadow-md rounded-lg overflow-hidden flex flex-col p-4">
+    <div className="bg-grey shadow-md rounded-lg overflow-hidden flex flex-col p-4">
       <img
         className="w-50 h-48 object-cover mx-auto"
         src={pokemon.sprites.front_default}
